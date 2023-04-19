@@ -69,7 +69,7 @@ describe("bet_place", () => {
     assert.equal(market.outcomeTwoOdds, outcome_two_odds);
     assert.equal(market.outcomeThreeOdds, outcome_three_odds);
     assert.equal(market.open, false);
-    assert.equal(market.result, "Pending");
+    assert.equal(market.winningOutcome, 0);
     assert.equal(market.settled, false);
     console.log("Max Win: ", market.maxWin.toNumber() / LAMPORTS_PER_SOL, " SOL");
     console.log("Last Bet ID: ", market.lastBetId);
@@ -265,7 +265,7 @@ describe("bet_place", () => {
     console.log("Bet Result: ", bet.result);
     assert.equal(bet.odds, market.outcomeOneOdds);
     console.log("Bet Odds: ", bet.odds / 1000);
-    const payout = new BN(amount.toNumber() * LAMPORTS_PER_SOL *  market.outcomeOneOdds / 1000)
+    const payout = new BN(amount.toNumber() * LAMPORTS_PER_SOL * market.outcomeOneOdds / 1000)
     assert.equal(bet.expectedPayout.toNumber(), payout.toNumber());
     console.log("Bet Expected Payout: ", bet.expectedPayout.toNumber() / LAMPORTS_PER_SOL, " SOL");
 
@@ -343,7 +343,7 @@ describe("bet_place", () => {
     console.log("Bet Result: ", bet.result);
     assert.equal(bet.odds, market.outcomeThreeOdds);
     console.log("Bet Odds: ", bet.odds / 1000);
-    const payout = new BN(amount.toNumber() * LAMPORTS_PER_SOL *  market.outcomeThreeOdds / 1000)
+    const payout = new BN(amount.toNumber() * LAMPORTS_PER_SOL * market.outcomeThreeOdds / 1000)
     assert.equal(bet.expectedPayout.toNumber(), payout.toNumber());
     console.log("Bet Expected Payout: ", bet.expectedPayout.toNumber() / LAMPORTS_PER_SOL, " SOL");
 
@@ -363,7 +363,13 @@ describe("bet_place", () => {
     );
 
     const winning_outcome = 1;
-  
+
+    // Close the market so that it can be settled
+    const close_market = await program.methods.closeMarket().accounts({
+      authority: authority,
+      market: market_pda,
+    }).rpc();
+
     const tx = await program.methods.settleMarket(
       winning_outcome
     ).accounts({
@@ -384,7 +390,7 @@ describe("bet_place", () => {
   it("Can settle a winning bet!", async () => {
 
     console.log("Settling bet...");
-    
+
     const authority = anchor.AnchorProvider.local().wallet.publicKey;
     const [market_pda] = await anchor.web3.PublicKey.findProgramAddressSync([
       new anchor.BN(event_id).toBuffer('le', 4),
@@ -395,11 +401,7 @@ describe("bet_place", () => {
     );
 
     const initialBettorBalance = await program.provider.connection.getBalance(authority);
-    // Close the market so that bet can settle
-    const close_market = await program.methods.closeMarket().accounts({
-      authority: authority,
-      market: market_pda,
-    }).rpc();
+
 
     console.log("Market PDA: ", market_pda.toBase58());
 
@@ -422,7 +424,7 @@ describe("bet_place", () => {
     console.log("Initial Market Balance: ", initialMarketBalance)
 
     const bet = await program.account.bet.fetch(bet_pda);
-    
+
     const tx = await program.methods.settleBet().accounts({
       authority: authority,
       user: bet.authority,
@@ -435,7 +437,7 @@ describe("bet_place", () => {
     console.log("Decreased by ", (newMarketBalance - initialMarketBalance) / LAMPORTS_PER_SOL, " SOL");
 
     const settled_bet = await program.account.bet.fetch(bet_pda);
-    
+
     assert.equal(settled_bet.result, "Win");
     console.log("Bet Result: ", settled_bet.result);
     assert.equal(settled_bet.settled, true);
@@ -451,7 +453,7 @@ describe("bet_place", () => {
   it("Can settle a losing bet!", async () => {
 
     console.log("Settling losing bet...");
-    
+
     const authority = anchor.AnchorProvider.local().wallet.publicKey;
     const [market_pda] = await anchor.web3.PublicKey.findProgramAddressSync([
       new anchor.BN(event_id).toBuffer('le', 4),
@@ -489,7 +491,7 @@ describe("bet_place", () => {
     console.log("Initial Market Balance: ", initialMarketBalance / LAMPORTS_PER_SOL, " SOL")
 
     const bet = await program.account.bet.fetch(bet_pda);
-    
+
     const tx = await program.methods.settleBet().accounts({
       authority: authority,
       user: bet.authority,
@@ -502,7 +504,7 @@ describe("bet_place", () => {
     console.log("Decreased by ", (newMarketBalance - initialMarketBalance) / LAMPORTS_PER_SOL, " SOL");
 
     const settled_bet = await program.account.bet.fetch(bet_pda);
-    
+
     assert.equal(settled_bet.result, "Lose");
     console.log("Bet Result: ", settled_bet.result);
     assert.equal(settled_bet.settled, true);

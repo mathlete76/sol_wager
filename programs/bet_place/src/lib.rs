@@ -203,10 +203,6 @@ pub mod bet_place {
             return Err(ProgramError::Custom(MyError::MarketOpen as u32));
         }
 
-        if market.settled == true {
-            return Err(ProgramError::Custom(MyError::MarketSettled as u32));
-        }
-
         if market.authority != *ctx.accounts.authority.key {
             return Err(ProgramError::Custom(MyError::UnauthorizedToSettleMarket as u32));
         }
