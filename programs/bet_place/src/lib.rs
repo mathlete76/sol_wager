@@ -207,7 +207,7 @@ pub mod bet_place {
 
         let bet = &mut ctx.accounts.bet;
 
-        if bet.user != *ctx.accounts.user.key {
+        if market.authority != *ctx.accounts.authority.key {
             return Err(ProgramError::Custom(MyError::UnauthorizedToSettleBet as u32));
         }
 
