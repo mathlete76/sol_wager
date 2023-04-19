@@ -239,9 +239,9 @@ describe("bet_place", () => {
     }).rpc();
 
     const newMarketBalance = await program.provider.connection.getBalance(market_pda);
-    console.log("New book balance: ", newMarketBalance / LAMPORTS_PER_SOL, " SOL");
-    assert.equal(newMarketBalance, initialMarketBalance + amount.toNumber());
-    console.log("Book balance is correct: ", newMarketBalance / LAMPORTS_PER_SOL, " SOL");
+    console.log("New market balance: ", newMarketBalance / LAMPORTS_PER_SOL, " SOL");
+    assert.equal(newMarketBalance, initialMarketBalance + (amount.toNumber() * LAMPORTS_PER_SOL));
+    console.log("Market balance is correct: ", newMarketBalance / LAMPORTS_PER_SOL, " SOL");
     // const newBettorBalance = await program.provider.connection.getBalance(authority);
     // assert.equal(newBettorBalance, initialBettorBalance - amount);
     // console.log("Bettor balance is correct: ", newBettorBalance / LAMPORTS_PER_SOL, " SOL");
@@ -271,57 +271,74 @@ describe("bet_place", () => {
 
   });
 
-  // it("Can settle a bet!", async () => {
-  //   const market = "1X2";
-  //   const authority = anchor.AnchorProvider.local().wallet.publicKey;
-  //   const [book_pda] = await anchor.web3.PublicKey.findProgramAddressSync([
-  //     anchor.utils.bytes.utf8.encode(market),
-  //     authority.toBuffer(),
-  //   ],
-  //   program.programId
-  //   );
+  it("Can settle a winning bet!", async () => {
 
-  //   const [bet_pda] = await anchor.web3.PublicKey.findProgramAddressSync([
-  //     anchor.utils.bytes.utf8.encode("Home"),
-  //     authority.toBuffer(),
-  //   ],
-  //   program.programId
-  //   );
+    console.log("Settling bet...");
+    
+    const authority = anchor.AnchorProvider.local().wallet.publicKey;
+    const [market_pda] = await anchor.web3.PublicKey.findProgramAddressSync([
+      new anchor.BN(event_id).toBuffer('le', 4),
+      new anchor.BN(market_id).toBuffer('le', 4),
+      authority.toBuffer(),
+    ],
+      program.programId
+    );
 
-  //   const amount = new BN(10000);
-  //   const placeBetTx = await program.methods.placeBet("Home", amount).accounts({
-  //     authority: authority,
-  //     book: book_pda,
-  //     bet: bet_pda,
-  //   }).rpc();
+    const initialBettorBalance = await program.provider.connection.getBalance(authority);
+    // Close the market so that bet can settle
+    const close_market = await program.methods.closeMarket().accounts({
+      authority: authority,
+      market: market_pda,
+    }).rpc();
 
-  //   const initialBookBalance = await program.provider.connection.getBalance(book_pda);
-  //   console.log("Initial book balance: ", initialBookBalance)
+    console.log("Market PDA: ", market_pda.toBase58());
 
-  //   const bet = await program.account.bet.fetch(bet_pda);
+    const market = await program.account.market.fetch(market_pda);
+    // For testng purposes, we will set the latest bet on the market to be settled
+    const bet_id = 1;
 
-  //   console.log(bet.user.toBase58());
-  //   console.log(authority.toBase58());
+    const [bet_pda] = await anchor.web3.PublicKey.findProgramAddressSync([
+      new anchor.BN(event_id).toBuffer('le', 4),
+      new anchor.BN(market_id).toBuffer('le', 4),
+      new anchor.BN(bet_id).toBuffer('le', 4),
+      authority.toBuffer(),
+    ],
+      program.programId
+    );
 
-  //   const payout = bet.win;
-  //   const tx = await program.methods.settleBet("Home").accounts({
-  //     authority: authority,
-  //     user: bet.user,
-  //     book: book_pda,
-  //     bet: bet_pda,
-  //   }).rpc({ commitment: "confirmed" });
+    console.log("Bet PDA: ", bet_pda.toBase58());
 
-  //   const newBookBalance = await program.provider.connection.getBalance(book_pda);
-  //   console.log("New bet balance: ", newBookBalance)
-  //   assert.equal(newBookBalance, initialBookBalance - payout.toNumber());
-  //   console.log("Book balance is correct: ", newBookBalance);
-  //   console.log("Bet payout is correct: ", bet.win.toNumber());
+    const initialMarketBalance = await program.provider.connection.getBalance(market_pda);
+    console.log("Initial Market Balance: ", initialMarketBalance)
 
+    const bet = await program.account.bet.fetch(bet_pda);
 
-  //   assert.equal(bet.state, "Settled");
-  //   console.log("Bet state is correct: ", bet.state);
+    const winning_outcome = 1;
+    
+    const tx = await program.methods.settleBet(winning_outcome).accounts({
+      authority: authority,
+      user: bet.authority,
+      market: market_pda,
+      bet: bet_pda,
+    }).rpc();
 
-  // });
+    const newMarketBalance = await program.provider.connection.getBalance(market_pda);
+    console.log("New market balance: ", newMarketBalance)
+    console.log("Decreased by ", (newMarketBalance - initialMarketBalance) / LAMPORTS_PER_SOL, " SOL");
+
+    const settled_bet = await program.account.bet.fetch(bet_pda);
+    
+    assert.equal(settled_bet.result, "Win");
+    console.log("Bet Result: ", settled_bet.result);
+    assert.equal(settled_bet.settled, true);
+    console.log("Bet Settled: ", settled_bet.settled);
+
+    const newBettorBalance = await program.provider.connection.getBalance(authority);
+    console.log("Previous bettor balance: ", initialBettorBalance / LAMPORTS_PER_SOL, " SOL");
+    console.log("New bettor balance: ", newBettorBalance / LAMPORTS_PER_SOL, " SOL");
+    console.log("Increased by ", (newBettorBalance - initialBettorBalance) / LAMPORTS_PER_SOL, " SOL");
+
+  });
 
 
 });

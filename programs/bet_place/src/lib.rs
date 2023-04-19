@@ -158,7 +158,9 @@ pub mod bet_place {
         }
 
         let bet = &mut ctx.accounts.bet;
-        bet.authority = *ctx.accounts.authority.key;
+        bet.authority = market.authority;
+        bet.user = *ctx.accounts.authority.key;
+        
         bet.event_id = event_id;
         bet.market_id = market_id;
         bet.bet_id = bet_id;
@@ -172,7 +174,7 @@ pub mod bet_place {
         let txn = anchor_lang::solana_program::system_instruction::transfer(
             &ctx.accounts.authority.key(),
             &ctx.accounts.market.key(),
-            amount.into(),
+            amount * 1_000_000_000,
         );
 
         anchor_lang::solana_program::program::invoke(
@@ -188,6 +190,7 @@ pub mod bet_place {
     }
 
     pub fn settle_bet(ctx: Context<SettleBet>, outcome: u8) -> ProgramResult {
+        
         if outcome != 1 && outcome != 2 && outcome != 3 && outcome != 4 {
             return Err(ProgramError::Custom(MyError::InvalidSelection as u32));
         }
@@ -217,38 +220,26 @@ pub mod bet_place {
             bet.result = "Void".to_string();
             bet.settled = true;
 
-            let txn = anchor_lang::solana_program::system_instruction::transfer(
-                &ctx.accounts.market.key(),
-                &ctx.accounts.user.key(),
-                bet.amount.into(),
-            );
+            let market_account = market.to_account_info();
+            let user_account = ctx.accounts.user.to_account_info();
 
-            anchor_lang::solana_program::program::invoke(
-                &txn,
-                &[
-                    ctx.accounts.market.to_account_info(),
-                    ctx.accounts.user.to_account_info(),
-                ],
-            )?;
-            return Ok(());
+            **market_account.try_borrow_mut_lamports()? += bet.amount * 1_000_000_000;
+            **user_account.try_borrow_mut_lamports()? -= bet.amount * 1_000_000_000;
         }
         if bet.selection == outcome {
-            let txn = anchor_lang::solana_program::system_instruction::transfer(
-                &ctx.accounts.market.key(),
-                &ctx.accounts.user.key(),
-                bet.expected_payout.into(),
-            );
 
-            anchor_lang::solana_program::program::invoke(
-                &txn,
-                &[
-                    ctx.accounts.market.to_account_info(),
-                    ctx.accounts.user.to_account_info(),
-                ],
-            )?;
+            let market_account = market.to_account_info();
+            let user_account = ctx.accounts.user.to_account_info();
+
+            **market_account.try_borrow_mut_lamports()? -= bet.expected_payout;
+            **user_account.try_borrow_mut_lamports()? += bet.expected_payout;
+            
+            market.settled = true;
             bet.result = "Win".to_string();
             bet.settled = true;
         } else {
+
+            market.settled = true;
             bet.result = "Lose".to_string();
             bet.settled = true;
         }
@@ -359,7 +350,6 @@ pub struct Bet {
 }
 
 #[derive(Accounts)]
-#[instruction(outcome: String)]
 pub struct SettleBet<'info> {
     #[account(mut)]
     pub bet: Account<'info, Bet>,
