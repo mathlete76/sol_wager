@@ -349,6 +349,38 @@ describe("bet_place", () => {
 
   });
 
+  it("Can settle the market!", async () => {
+
+    console.log("Settling market...");
+
+    const authority = anchor.AnchorProvider.local().wallet.publicKey;
+    const [market_pda] = await anchor.web3.PublicKey.findProgramAddressSync([
+      new anchor.BN(event_id).toBuffer('le', 4),
+      new anchor.BN(market_id).toBuffer('le', 4),
+      authority.toBuffer(),
+    ],
+      program.programId
+    );
+
+    const winning_outcome = 1;
+  
+    const tx = await program.methods.settleMarket(
+      winning_outcome
+    ).accounts({
+      authority: authority,
+      market: market_pda,
+    }).rpc();
+
+    const market = await program.account.market.fetch(market_pda);
+    assert.equal(market.settled, true);
+    console.log("Market Settled: ", market.settled);
+    assert.equal(market.winningOutcome, winning_outcome);
+    console.log("Market Winning Outcome: ", market.winningOutcome);
+
+  });
+
+
+
   it("Can settle a winning bet!", async () => {
 
     console.log("Settling bet...");
@@ -390,10 +422,8 @@ describe("bet_place", () => {
     console.log("Initial Market Balance: ", initialMarketBalance)
 
     const bet = await program.account.bet.fetch(bet_pda);
-
-    const winning_outcome = 1;
     
-    const tx = await program.methods.settleBet(winning_outcome).accounts({
+    const tx = await program.methods.settleBet().accounts({
       authority: authority,
       user: bet.authority,
       market: market_pda,
@@ -459,10 +489,8 @@ describe("bet_place", () => {
     console.log("Initial Market Balance: ", initialMarketBalance / LAMPORTS_PER_SOL, " SOL")
 
     const bet = await program.account.bet.fetch(bet_pda);
-
-    const winning_outcome = 1;
     
-    const tx = await program.methods.settleBet(winning_outcome).accounts({
+    const tx = await program.methods.settleBet().accounts({
       authority: authority,
       user: bet.authority,
       market: market_pda,

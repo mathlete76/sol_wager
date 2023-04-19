@@ -76,7 +76,7 @@ pub mod bet_place {
         market.outcome_one_odds = outcome_one_odds;
         market.outcome_two_odds = outcome_two_odds;
         market.open = false;
-        market.result = "Pending".to_string();
+        market.winning_outcome = 0;
         market.settled = false;
         market.max_win = 1000 * LAMPORTS_PER_SOL;
         market.last_bet_id = 0;
@@ -191,7 +191,7 @@ pub mod bet_place {
         Ok(())
     }
 
-    pub fn settle_bet(ctx: Context<SettleBet>, outcome: u8) -> ProgramResult {
+    pub fn settle_market(ctx: Context<SettleMarket>, outcome: u8) -> ProgramResult {
         
         if outcome != 1 && outcome != 2 && outcome != 3 && outcome != 4 {
             return Err(ProgramError::Custom(MyError::InvalidSelection as u32));
@@ -203,9 +203,32 @@ pub mod bet_place {
             return Err(ProgramError::Custom(MyError::MarketOpen as u32));
         }
 
-        // if market.settled == true {
-        //     return Err(ProgramError::Custom(MyError::MarketSettled as u32));
-        // }
+        if market.settled == true {
+            return Err(ProgramError::Custom(MyError::MarketSettled as u32));
+        }
+
+        if market.authority != *ctx.accounts.authority.key {
+            return Err(ProgramError::Custom(MyError::UnauthorizedToSettleMarket as u32));
+        }
+
+        market.settled = true;
+
+        market.winning_outcome = outcome;
+
+        Ok(())
+    }
+
+    pub fn settle_bet(ctx: Context<SettleBet>) -> ProgramResult {
+
+        let market = &mut ctx.accounts.market;
+
+        if market.open == true {
+            return Err(ProgramError::Custom(MyError::MarketOpen as u32));
+        }
+
+        if market.settled != true {
+            return Err(ProgramError::Custom(MyError::MarketNotSettled as u32));
+        }
 
         let bet = &mut ctx.accounts.bet;
 
@@ -217,8 +240,7 @@ pub mod bet_place {
             return Err(ProgramError::Custom(MyError::BetSettled as u32));
         }
 
-        if outcome == 4 {
-            market.result = "Void".to_string();
+        if market.winning_outcome == 4 {
             bet.result = "Void".to_string();
             bet.settled = true;
 
@@ -228,7 +250,7 @@ pub mod bet_place {
             **market_account.try_borrow_mut_lamports()? += bet.amount * 1_000_000_000;
             **user_account.try_borrow_mut_lamports()? -= bet.amount * 1_000_000_000;
         }
-        if bet.selection == outcome {
+        if bet.selection == market.winning_outcome {
 
             let market_account = market.to_account_info();
             let user_account = ctx.accounts.user.to_account_info();
@@ -236,12 +258,10 @@ pub mod bet_place {
             **market_account.try_borrow_mut_lamports()? -= bet.expected_payout;
             **user_account.try_borrow_mut_lamports()? += bet.expected_payout;
             
-            market.settled = true;
             bet.result = "Win".to_string();
             bet.settled = true;
         } else {
 
-            market.settled = true;
             bet.result = "Lose".to_string();
             bet.settled = true;
         }
@@ -283,7 +303,7 @@ pub struct Market {
     pub outcome_two_odds: u16,
     pub outcome_three_odds: Option<u16>,
     pub open: bool,
-    pub result: String,
+    pub winning_outcome: u8,
     pub settled: bool,
     pub max_win: u64,
     pub last_bet_id: u32,
@@ -352,6 +372,14 @@ pub struct Bet {
 }
 
 #[derive(Accounts)]
+pub struct SettleMarket<'info> {
+    #[account(mut)]
+    pub market: Account<'info, Market>,
+    #[account(mut)]
+    pub authority: Signer<'info>,
+}
+
+#[derive(Accounts)]
 pub struct SettleBet<'info> {
     #[account(mut)]
     pub bet: Account<'info, Bet>,
@@ -395,4 +423,8 @@ pub enum MyError {
     UnauthorisedToSettleBet = 12,
     #[msg("Invalid Bet ID")]
     InvalidBetId = 13,
+    #[msg("Unauthorized to settle market.")]
+    UnauthorizedToSettleMarket = 14,
+    #[msg("Market Not Settled")]
+    MarketNotSettled = 15,
 }
