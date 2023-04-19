@@ -157,6 +157,8 @@ pub mod bet_place {
             return Err(ProgramError::Custom(MyError::InvalidBetId as u32));
         }
 
+        market.last_bet_id = bet_id;
+
         let bet = &mut ctx.accounts.bet;
         bet.authority = market.authority;
         bet.user = *ctx.accounts.authority.key;
@@ -201,9 +203,9 @@ pub mod bet_place {
             return Err(ProgramError::Custom(MyError::MarketOpen as u32));
         }
 
-        if market.settled == true {
-            return Err(ProgramError::Custom(MyError::MarketSettled as u32));
-        }
+        // if market.settled == true {
+        //     return Err(ProgramError::Custom(MyError::MarketSettled as u32));
+        // }
 
         let bet = &mut ctx.accounts.bet;
 
