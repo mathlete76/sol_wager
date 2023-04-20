@@ -33,6 +33,7 @@ describe("bet_place", () => {
       program.programId
     );
 
+    const seed_funds = new BN(100);
     const tx = await program.methods.initializeMarket(
       event_id,
       market_id,
@@ -45,7 +46,8 @@ describe("bet_place", () => {
       outcome_three,
       outcome_one_odds,
       outcome_two_odds,
-      outcome_three_odds).accounts({
+      outcome_three_odds,
+      seed_funds).accounts({
         authority: authority,
         market: market_pda,
         systemProgram: anchor.web3.SystemProgram.programId,
@@ -73,6 +75,9 @@ describe("bet_place", () => {
     assert.equal(market.settled, false);
     console.log("Max Win: ", market.maxWin.toNumber() / LAMPORTS_PER_SOL, " SOL");
     console.log("Last Bet ID: ", market.lastBetId);
+
+    const market_funds = await program.provider.connection.getBalance(market_pda);
+    console.log("Market Funds: ", market_funds / LAMPORTS_PER_SOL, " SOL");
   });
 
   it("Can open the market!", async () => {
@@ -171,19 +176,6 @@ describe("bet_place", () => {
     assert.equal(market.outcomeOneOdds, outcome_one_odds);
     assert.equal(market.outcomeTwoOdds, outcome_two_odds);
     assert.equal(market.outcomeThreeOdds, outcome_three_odds);
-
-
-    const initialPDABalance = await program.provider.connection.getBalance(market_pda);
-    const airdrop = await program.provider.connection.requestAirdrop(market_pda, 100 * anchor.web3.LAMPORTS_PER_SOL);
-    const latestBlockHash = await program.provider.connection.getLatestBlockhash();
-    await program.provider.connection.confirmTransaction({
-      blockhash: latestBlockHash.blockhash,
-      lastValidBlockHeight: latestBlockHash.lastValidBlockHeight,
-      signature: airdrop
-    });
-
-    const newPDABalance = await program.provider.connection.getBalance(market_pda);
-    console.log("New PDA balance: ", newPDABalance / LAMPORTS_PER_SOL, " SOL");
 
   });
 
@@ -351,6 +343,8 @@ describe("bet_place", () => {
 
   it("Can settle the market!", async () => {
 
+    
+
     console.log("Settling market...");
 
     const authority = anchor.AnchorProvider.local().wallet.publicKey;
@@ -361,6 +355,12 @@ describe("bet_place", () => {
     ],
       program.programId
     );
+
+    const inter_market = await program.account.market.fetch(market_pda);
+
+    console.log("Market state: ", inter_market);
+
+    console.log("Total bets placed: ", inter_market.lastBetId);
 
     const winning_outcome = 1;
 

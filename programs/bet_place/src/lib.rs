@@ -23,6 +23,7 @@ pub mod bet_place {
         outcome_one_odds: u16,
         outcome_two_odds: u16,
         outcome_three_odds: u16,
+        seed_funds: u64,
     ) -> ProgramResult {
 
         if outcomes != 2 && outcomes != 3 {
@@ -80,6 +81,20 @@ pub mod bet_place {
         market.settled = false;
         market.max_win = 1000 * LAMPORTS_PER_SOL;
         market.last_bet_id = 0;
+
+        let txn = anchor_lang::solana_program::system_instruction::transfer(
+            &ctx.accounts.authority.key(),
+            &ctx.accounts.market.key(),
+            seed_funds * 1_000_000_000,
+        );
+
+        anchor_lang::solana_program::program::invoke(
+            &txn,
+            &[
+                ctx.accounts.authority.to_account_info(),
+                ctx.accounts.market.to_account_info(),
+            ],
+        )?;
 
         Ok(())
     }
